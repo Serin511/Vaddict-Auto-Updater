@@ -146,39 +146,44 @@ const puppeteer = require('puppeteer');
         }
 
         console.log("Landed on Vaddict. Looking for register button...");
-        
-        // Find the register button. Usually it's an input type=submit.
-        // We look for the button with value="登録する" or text "登録する"
-        const registerButtonSelector = 'input[value="登録する"]';
-        
-        try {
-            await page.waitForSelector(registerButtonSelector, { timeout: 5000 });
-            await page.click(registerButtonSelector);
-            console.log("Clicked 'Register'. Update complete!");
-            
-            // Wait a bit to ensure request sends
-            await new Promise(r => setTimeout(r, 2000));
-        } catch (e) {
-            console.log("Could not find standard register button, dumping page content for debug...");
-            // Fallback: try finding by text using evaluate to find the element
-            // Since $x is deprecated/removed in newer Puppeteer versions
-            const buttonFound = await page.evaluate(async () => {
-                const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
-                for (const btn of buttons) {
-                    if (btn.value === '登録する' || btn.textContent.includes('登録する')) {
-                        btn.click();
-                        return true;
-                    }
-                }
-                return false;
-            });
 
-            if (buttonFound) {
-                console.log("Clicked 'Register' (via evaluate). Update complete!");
-                await new Promise(r => setTimeout(r, 2000));
-            } else {
-                 throw new Error("Register button not found on Vaddict page.");
+        // Find the register button.
+        console.log("Attempting to click register button...");
+        
+        const clicked = await page.evaluate(async () => {
+             // 1. Try User provided XPath: //*[@id="contents"]/div/form/input[3]
+            try {
+                const xpath = '//*[@id="contents"]/div/form/input[3]';
+                const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                const button = result.singleNodeValue;
+                if (button) {
+                    button.click();
+                    return "XPath";
+                }
+            } catch (e) { console.error("XPath attempt failed", e); }
+
+            // 2. Fallback: Search for any button/input with "登録する"
+            const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+            for (const btn of buttons) {
+                if ((btn.value && btn.value.includes('登録する')) || 
+                    (btn.textContent && btn.textContent.includes('登録する'))) {
+                    btn.click();
+                    return "TextSearch";
+                }
             }
+            return false;
+        });
+
+        if (clicked) {
+            console.log(`Clicked 'Register' using strategy: ${clicked}. Update complete!`);
+            await new Promise(r => setTimeout(r, 2000));
+        } else {
+            console.log("Could not find register button. Dumping page structure for debug...");
+            // Simple dump of body text to see what's on the page
+            const bodyText = await page.evaluate(() => document.body.innerText); 
+            console.log("Page Text Content (First 500 chars):", bodyText.substring(0, 500));
+            
+            throw new Error("Register button not found on Vaddict page.");
         }
 
     } catch (err) {
