@@ -1,4 +1,8 @@
 const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
+
+const LAST_PLAY_DATE_FILE = 'last_play_date.txt';
 
 (async () => {
     console.log("Starting Vaddict Auto Updater...");
@@ -35,6 +39,45 @@ const puppeteer = require('puppeteer');
         if (page.url().includes('login')) {
             throw new Error("Login failed. M573SSID cookie might be invalid or expired.");
         }
+
+        // --- Check Last Play Date ---
+        console.log("Checking Last Play Date...");
+        
+        // Extract Last Play Date from the page
+        const lastPlayDate = await page.evaluate(() => {
+             // Look for the element with text "最終プレー日時" and get its sibling/value
+             // Based on sample: <div class="profile_col">最終プレー日時</div> <div class="profile_cnt">2026/02/09 21:09:41</div>
+             const labels = Array.from(document.querySelectorAll('.profile_col'));
+             const label = labels.find(el => el.textContent.includes('最終プレー日時'));
+             if (label && label.nextElementSibling) {
+                 return label.nextElementSibling.textContent.trim();
+             }
+             return null;
+        });
+
+        if (!lastPlayDate) {
+            console.warn("Warning: Could not find Last Play Date on profile page. Proceeding with update anyway.");
+        } else {
+            console.log(`Current Last Play Date: ${lastPlayDate}`);
+            
+            // Read stored last play date
+            let storedLastPlayDate = '';
+            try {
+                if (fs.existsSync(LAST_PLAY_DATE_FILE)) {
+                    storedLastPlayDate = fs.readFileSync(LAST_PLAY_DATE_FILE, 'utf8').trim();
+                    console.log(`Stored Last Play Date: ${storedLastPlayDate}`);
+                }
+            } catch (err) {
+                console.log("No stored last play date found or read error.");
+            }
+
+            if (lastPlayDate === storedLastPlayDate) {
+                console.log("Last Play Date matches. No new play data. Skipping update.");
+                process.exit(0);
+            }
+        }
+        
+        console.log("New play data detected (or first run). Proceeding with update...");
 
         console.log("Injecting data collection script...");
 
@@ -176,6 +219,13 @@ const puppeteer = require('puppeteer');
 
         if (clicked) {
             console.log(`Clicked 'Register' using strategy: ${clicked}. Update complete!`);
+            
+            // Update the stored Last Play Date only if update was successful
+            if (lastPlayDate) {
+                fs.writeFileSync(LAST_PLAY_DATE_FILE, lastPlayDate, 'utf8');
+                console.log(`Updated stored Last Play Date to: ${lastPlayDate}`);
+            }
+
             await new Promise(r => setTimeout(r, 2000));
         } else {
             console.log("Could not find register button. Dumping page structure for debug...");

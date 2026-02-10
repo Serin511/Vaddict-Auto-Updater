@@ -23,7 +23,22 @@ jobs:
     - name: Install dependencies
       run: npm install
 
+    - name: Restore Last Play Date
+      uses: actions/cache@v4
+      with:
+        path: last_play_date.txt
+        key: last-play-date-${{ github.run_id }}
+        restore-keys: |
+          last-play-date-
+
     - name: Run Vaddict Updater
       env:
         M573SSID: ${{ secrets.M573SSID }}
       run: node src/index.js
+
+    - name: Save Last Play Date
+      if: success()
+      uses: actions/cache/save@v4
+      with:
+        path: last_play_date.txt
+        key: last-play-date-${{ github.run_id }}
