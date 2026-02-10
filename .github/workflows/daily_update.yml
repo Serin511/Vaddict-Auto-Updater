@@ -1,0 +1,29 @@
+name: Daily Vaddict Update
+
+on:
+  schedule:
+    # 09:00 GMT+9 corresponds to 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run Vaddict Updater
+      env:
+        M573SSID: ${{ secrets.M573SSID }}
+      run: node src/index.js
