@@ -1,8 +1,6 @@
 name: Daily Vaddict Update
 
 on:
-  push:
-    branches: [ "main" ]
   schedule:
     # 09:00 GMT+9 corresponds to 00:00 UTC
     - cron: '0 0 * * *'
