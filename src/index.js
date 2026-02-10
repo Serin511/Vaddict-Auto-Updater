@@ -160,15 +160,25 @@ const puppeteer = require('puppeteer');
             await new Promise(r => setTimeout(r, 2000));
         } catch (e) {
             console.log("Could not find standard register button, dumping page content for debug...");
-            // Fallback: try finding by text
-             const [button] = await page.$x("//button[contains(., '登録する')] | //input[@value='登録する']");
-             if (button) {
-                 await button.click();
-                 console.log("Clicked 'Register' (via XPath). Update complete!");
-                 await new Promise(r => setTimeout(r, 2000));
-             } else {
+            // Fallback: try finding by text using evaluate to find the element
+            // Since $x is deprecated/removed in newer Puppeteer versions
+            const buttonFound = await page.evaluate(async () => {
+                const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+                for (const btn of buttons) {
+                    if (btn.value === '登録する' || btn.textContent.includes('登録する')) {
+                        btn.click();
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            if (buttonFound) {
+                console.log("Clicked 'Register' (via evaluate). Update complete!");
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
                  throw new Error("Register button not found on Vaddict page.");
-             }
+            }
         }
 
     } catch (err) {
