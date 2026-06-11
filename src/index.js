@@ -89,13 +89,12 @@ const LAST_PLAY_DATE_FILE = 'last_play_date.txt';
         const navigationPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 180000 });
 
         await page.evaluate(async () => {
-            // --- INJECTED LOGIC FROM regist_nabla.js (Modified) ---
+            // --- INJECTED LOGIC FROM regist_nabla.js (latest) ---
             const BASE_URL = "https://p.eagate.573.jp/game/sdvx/vii/playdata/";
             const INDEX_PATH = "index.html";
             const PLAYER_PATH = "profile/index.html";
             const MUSIC_PATH = "musicdata/index.html";
             const SEND_TO = "https://vaddict.b35.jp/regist_nabla.php";
-            const LIMIT = 150;
 
             const data = {
                 profile: "",
@@ -114,8 +113,8 @@ const LAST_PLAY_DATE_FILE = 'last_play_date.txt';
             };
 
             const getMusicData = async (page) => {
-                const url = `${BASE_URL}${MUSIC_PATH}?limit=${LIMIT}&sort=0&page=${page}`;
-                return fetchHTML(url, BASE_URL + MUSIC_PATH + "?limit=" + LIMIT + "page=1&sort=0");
+                const url = `${BASE_URL}${MUSIC_PATH}?&sort=0&page=${page}`;
+                return fetchHTML(url, BASE_URL + MUSIC_PATH + "?page=1&sort=0");
             };
 
             const createAndSubmitForm = (data) => {
@@ -145,28 +144,32 @@ const LAST_PLAY_DATE_FILE = 'last_play_date.txt';
 
                 // 2. Fetch Music Index to determine pages
                 console.log("Fetching Music Index...");
-                const music_index = await fetchHTML(BASE_URL + MUSIC_PATH + "?limit=" + LIMIT, BASE_URL + MUSIC_PATH + "?limit=" + LIMIT + "page=1&sort=0");
+                const music_index = await fetchHTML(BASE_URL + MUSIC_PATH, BASE_URL + PLAYER_PATH);
 
-                if (music_index.indexOf('このサービスはe-amusement ベーシックコースの加入が必要です｡') != -1) {
+                // Basic course check (mojibake string matches the raw decoded eagate response)
+                if (music_index.indexOf('縺薙�繧ｵ繝ｼ繝薙せ縺ｯe-amusement 繝吶�繧ｷ繝�け繧ｳ繝ｼ繧ｹ縺ｮ蜉�蜈･縺悟ｿ�ｦ√〒縺呻ｽ｡') != -1) {
                     throw new Error("Basic Course subscription required.");
                 }
 
-                const matches = music_index.match(/<span class="page_num">[0-9]{1,3}/g);
-                let maxPage = 1;
-                if (matches) {
-                    const music_page_list_temp = matches.map(match => match.replace('<span class="page_num">', ''));
-                    maxPage = Number(music_page_list_temp.slice(-1)[0]) + 1;
-                } else {
-                    maxPage = 2; // Default to at least 1 page iteration
-                }
+                // 3. Determine page count from the #search_page select, then fetch all pages
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(music_index, 'text/html');
+                const select = doc.querySelector('#search_page');
 
-                // 3. Fetch all pages
-                for (let k = 1; k < maxPage; k++) {
-                    console.log(`Fetching Music Data page ${k}/${maxPage - 1}...`);
-                    const dataPage = await getMusicData(k);
+                if (select && select.options.length > 0) {
+                    const lastValue = select.options[select.options.length - 1].value;
+                    const maxPage = Number(lastValue) + 1;
+
+                    for (let k = 1; k < maxPage; k++) {
+                        console.log(`Fetching Music Data page ${k}/${maxPage - 1}...`);
+                        const dataPage = await getMusicData(k);
+                        data.musicdata_list.push(dataPage);
+                        await _sleep(getRandomInt(600, 1100));
+                    }
+                } else {
+                    console.log("Fetching Music Data page 1/1...");
+                    const dataPage = await getMusicData(1);
                     data.musicdata_list.push(dataPage);
-                    // Reduced sleep time slightly for bot efficiency, but kept to avoid rate limiting
-                    await _sleep(getRandomInt(500, 1000));
                 }
 
                 // 4. Submit
